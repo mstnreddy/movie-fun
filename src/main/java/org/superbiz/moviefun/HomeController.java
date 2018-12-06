@@ -1,6 +1,10 @@
 package org.superbiz.moviefun;
 
 import org.springframework.stereotype.Controller;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallbackWithoutResult;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.superbiz.moviefun.albums.Album;
 import org.superbiz.moviefun.albums.AlbumFixtures;
@@ -19,11 +23,23 @@ public class HomeController {
     private final MovieFixtures movieFixtures;
     private final AlbumFixtures albumFixtures;
 
-    public HomeController(MoviesBean moviesBean, AlbumsBean albumsBean, MovieFixtures movieFixtures, AlbumFixtures albumFixtures) {
+
+    private final PlatformTransactionManager moviestransactionManager;
+    private final PlatformTransactionManager albumstransactionManager;
+    private final TransactionTemplate albumsTransactiontemplate;
+    private final TransactionTemplate moviesTransactiontemplate;
+
+
+    public HomeController(MoviesBean moviesBean, AlbumsBean albumsBean, MovieFixtures movieFixtures, AlbumFixtures albumFixtures,
+                          PlatformTransactionManager moviestransactionManager,PlatformTransactionManager albumstransactionManager) {
         this.moviesBean = moviesBean;
         this.albumsBean = albumsBean;
         this.movieFixtures = movieFixtures;
         this.albumFixtures = albumFixtures;
+        this.moviestransactionManager=moviestransactionManager;
+        this.albumstransactionManager=albumstransactionManager;
+        this.albumsTransactiontemplate = new TransactionTemplate(albumstransactionManager);
+        this.moviesTransactiontemplate = new TransactionTemplate(moviestransactionManager);
     }
 
     @GetMapping("/")
@@ -33,12 +49,40 @@ public class HomeController {
 
     @GetMapping("/setup")
     public String setup(Map<String, Object> model) {
+
+
         for (Movie movie : movieFixtures.load()) {
-            moviesBean.addMovie(movie);
+
+            moviesTransactiontemplate.execute(new TransactionCallbackWithoutResult() {
+
+                protected void doInTransactionWithoutResult(TransactionStatus status) {
+                    try {
+                        moviesBean.addMovie(movie);
+                    } catch (Exception ex) {
+                        status.setRollbackOnly();
+                    }
+                }
+            });
+
+
         }
 
         for (Album album : albumFixtures.load()) {
-            albumsBean.addAlbum(album);
+
+
+            albumsTransactiontemplate.execute(new TransactionCallbackWithoutResult() {
+
+                protected void doInTransactionWithoutResult(TransactionStatus status) {
+                    try {
+                        albumsBean.addAlbum(album);
+                    } catch (Exception ex) {
+                        status.setRollbackOnly();
+                    }
+                }
+            });
+
+
+
         }
 
         model.put("movies", moviesBean.getMovies());
@@ -46,4 +90,7 @@ public class HomeController {
 
         return "setup";
     }
-}
+
+
+
+   }
