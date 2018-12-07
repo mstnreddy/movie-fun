@@ -7,6 +7,9 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.superbiz.moviefun.blobstore.Blob;
+import org.superbiz.moviefun.blobstore.BlobStore;
+import org.superbiz.moviefun.blobstore.FileStore;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -15,6 +18,7 @@ import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
+import java.util.Optional;
 
 import static java.lang.ClassLoader.getSystemResource;
 import static java.lang.String.format;
@@ -25,9 +29,12 @@ import static java.nio.file.Files.readAllBytes;
 public class AlbumsController {
 
     private final AlbumsBean albumsBean;
+    private final BlobStore blobStore;
 
-    public AlbumsController(AlbumsBean albumsBean) {
+    public AlbumsController(AlbumsBean albumsBean,BlobStore blobStore) {
+
         this.albumsBean = albumsBean;
+        this.blobStore=blobStore;
     }
 
 
@@ -45,22 +52,27 @@ public class AlbumsController {
 
     @PostMapping("/{albumId}/cover")
     public String uploadCover(@PathVariable long albumId, @RequestParam("file") MultipartFile uploadedFile) throws IOException {
-        saveUploadToFile(uploadedFile, getCoverFile(albumId));
-
+       Blob b=new Blob(albumId,uploadedFile.getBytes(),null,"");
+        blobStore.put(b);
         return format("redirect:/albums/%d", albumId);
     }
 
     @GetMapping("/{albumId}/cover")
     public HttpEntity<byte[]> getCover(@PathVariable long albumId) throws IOException, URISyntaxException {
-        Path coverFilePath = getExistingCoverPath(albumId);
-        byte[] imageBytes = readAllBytes(coverFilePath);
-        HttpHeaders headers = createImageHttpHeaders(coverFilePath, imageBytes);
+        Optional<Blob> blob= blobStore.get(albumId);
 
-        return new HttpEntity<>(imageBytes, headers);
+        HttpHeaders headers= new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType(blob.get().contentType));
+        headers.setContentLength(blob.get().bytesStream.length);
+
+        return new HttpEntity<>(blob.get().bytesStream, headers);
     }
 
 
-    private void saveUploadToFile(@RequestParam("file") MultipartFile uploadedFile, File targetFile) throws IOException {
+
+
+
+    /*private void saveUploadToFile(@RequestParam("file") MultipartFile uploadedFile, File targetFile) throws IOException {
         targetFile.delete();
         targetFile.getParentFile().mkdirs();
         targetFile.createNewFile();
@@ -79,7 +91,7 @@ public class AlbumsController {
         return headers;
     }
 
-    private File getCoverFile(@PathVariable long albumId) {
+  /*  private File getCoverFile(@PathVariable long albumId) {
         String coverFileName = format("covers/%d", albumId);
         return new File(coverFileName);
     }
@@ -95,5 +107,5 @@ public class AlbumsController {
         }
 
         return coverFilePath;
-    }
+    }*/
 }
